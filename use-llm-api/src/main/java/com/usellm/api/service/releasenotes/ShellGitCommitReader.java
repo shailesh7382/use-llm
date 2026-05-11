@@ -129,11 +129,9 @@ public class ShellGitCommitReader implements GitCommitReader {
         if (!Files.isDirectory(repoPath)) {
             throw new LLMException("repoPath does not exist or is not a directory", 400, "invalid_repo_path");
         }
-        if (!Files.exists(repoPath.resolve(".git"))) {
-            String topLevel = readOptional(repoPath, "rev-parse", "--show-toplevel");
-            if (topLevel == null || topLevel.isBlank()) {
-                throw new LLMException("repoPath is not a git repository", 400, "invalid_git_repo");
-            }
+        String topLevel = readOptional(repoPath, "rev-parse", "--show-toplevel");
+        if (topLevel == null || topLevel.isBlank()) {
+            throw new LLMException("repoPath is not a git repository", 400, "invalid_git_repo");
         }
         return repoPath;
     }
