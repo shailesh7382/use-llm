@@ -1,0 +1,3 @@
+com/usellm/client/adapter/OpenAICompatibleAdapter.class
+com/usellm/client/config/LLMClientConfig.class
+com/usellm/client/config/WebClientConfiguration.class
