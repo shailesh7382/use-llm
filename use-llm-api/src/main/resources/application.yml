@@ -127,6 +127,12 @@ llm:
             required: false
             default-value: "(no schema provided — write generic SQL)"
 
+  release-notes:
+    allowed-repo-roots:
+      - ${user.dir}
+      - ${user.dir}/..
+      - ${java.io.tmpdir}
+
 # Actuator
 management:
   endpoints:

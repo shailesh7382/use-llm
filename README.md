@@ -185,6 +185,8 @@ Content-Type: application/json
 
 The API reads commits from the requested git branch, analyzes each commit message and diff individually, and then uses the configured LLM to turn those commit analyses into polished markdown release notes. If `baseRef` is omitted, the API will try to compare the branch against the repository default branch (`origin/HEAD`, `main`, or `master`) and otherwise fall back to the latest commits on the branch.
 
+For safety, the API only reads repositories under the configured `llm.release-notes.allowed-repo-roots` paths.
+
 ---
 
 ## Memory Management

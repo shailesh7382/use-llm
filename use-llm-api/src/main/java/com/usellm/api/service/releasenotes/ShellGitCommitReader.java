@@ -1,5 +1,6 @@
 package com.usellm.api.service.releasenotes;
 
+import com.usellm.api.config.ReleaseNotesProperties;
 import com.usellm.api.dto.ReleaseNotesRequestDto;
 import com.usellm.core.exception.LLMException;
 import org.slf4j.Logger;
@@ -24,6 +25,12 @@ public class ShellGitCommitReader implements GitCommitReader {
     private static final Logger log = LoggerFactory.getLogger(ShellGitCommitReader.class);
     private static final Duration COMMAND_TIMEOUT = Duration.ofSeconds(30);
     private static final String FIELD_SEPARATOR = "\u001f";
+    private static final String EMPTY_GIT_FORMAT = "--format=";
+    private final ReleaseNotesProperties releaseNotesProperties;
+
+    public ShellGitCommitReader(ReleaseNotesProperties releaseNotesProperties) {
+        this.releaseNotesProperties = releaseNotesProperties;
+    }
 
     @Override
     public List<GitCommitData> readCommits(ReleaseNotesRequestDto request) {
@@ -89,7 +96,7 @@ public class ShellGitCommitReader implements GitCommitReader {
             throw new LLMException("Unable to parse git metadata for commit " + sha, 500, "git_metadata_error");
         }
 
-        String diff = runGit(repoPath, "show", "--stat", "--patch", "--unified=1", "--no-color", "--format=", sha);
+        String diff = runGit(repoPath, "show", "--stat", "--patch", "--unified=1", "--no-color", EMPTY_GIT_FORMAT, sha);
         String trimmedDiff = trimToLength(diff, maxDiffCharacters);
 
         return GitCommitData.builder()
@@ -116,6 +123,9 @@ public class ShellGitCommitReader implements GitCommitReader {
             throw new LLMException("repoPath is required", 400, "validation_error");
         }
         Path repoPath = Path.of(repoPathValue).toAbsolutePath().normalize();
+        if (!isUnderAllowedRoot(repoPath)) {
+            throw new LLMException("repoPath is outside the configured allowed repository roots", 400, "invalid_repo_path");
+        }
         if (!Files.isDirectory(repoPath)) {
             throw new LLMException("repoPath does not exist or is not a directory", 400, "invalid_repo_path");
         }
@@ -126,6 +136,23 @@ public class ShellGitCommitReader implements GitCommitReader {
             }
         }
         return repoPath;
+    }
+
+    private boolean isUnderAllowedRoot(Path repoPath) {
+        List<String> allowedRoots = releaseNotesProperties.getAllowedRepoRoots();
+        if (allowedRoots == null || allowedRoots.isEmpty()) {
+            return false;
+        }
+        for (String allowedRoot : allowedRoots) {
+            if (allowedRoot == null || allowedRoot.isBlank()) {
+                continue;
+            }
+            Path normalizedRoot = Path.of(allowedRoot).toAbsolutePath().normalize();
+            if (repoPath.startsWith(normalizedRoot)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private int normalizeMaxCommits(Integer maxCommits) {

@@ -1,5 +1,6 @@
 package com.usellm.api.service.releasenotes;
 
+import com.usellm.api.config.ReleaseNotesProperties;
 import com.usellm.api.dto.ReleaseNotesRequestDto;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -36,7 +37,7 @@ class ShellGitCommitReaderTest {
         run(repo, "git", "add", "README.md");
         run(repo, "git", "commit", "-m", "Add release notes support", "-m", "Captures branch changes.");
 
-        ShellGitCommitReader reader = new ShellGitCommitReader();
+        ShellGitCommitReader reader = new ShellGitCommitReader(new ReleaseNotesProperties());
         ReleaseNotesRequestDto request = ReleaseNotesRequestDto.builder()
                 .repoPath(repo.toString())
                 .branch("feature/release-notes")
