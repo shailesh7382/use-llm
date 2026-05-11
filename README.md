@@ -253,5 +253,4 @@ mvn test
 - **Spring Web MVC** (REST controllers)
 - **Spring Data JPA + H2** (persistent conversation memory)
 - **Project Reactor** (Mono/Flux for async operations)
-- **Lombok** (boilerplate reduction)
 - **Jackson** (JSON serialization)
