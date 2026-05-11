@@ -1,5 +1,6 @@
 package com.usellm.memory.service;
 
+import com.usellm.core.model.ConversationSummary;
 import com.usellm.core.model.Message;
 import com.usellm.core.model.Role;
 import com.usellm.core.port.MemoryPort;
@@ -11,6 +12,7 @@ import com.usellm.memory.repository.MessageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -184,6 +186,22 @@ public class ConversationMemoryService implements MemoryPort {
         return getMessages(conversationId).stream()
                 .mapToInt(Message::estimateTokens)
                 .sum();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConversationSummary> listConversations(int limit) {
+        int safeLimit = limit > 0 ? limit : 50;
+        return conversationRepository.findAll(Sort.by(Sort.Direction.DESC, "updatedAt"))
+                .stream()
+                .limit(safeLimit)
+                .map(conv -> ConversationSummary.builder()
+                        .conversationId(conv.getConversationId())
+                        .createdAt(conv.getCreatedAt())
+                        .updatedAt(conv.getUpdatedAt())
+                        .messageCount(getMessageCount(conv.getConversationId()))
+                        .build())
+                .collect(Collectors.toList());
     }
 
     private Message toMessage(MessageEntity entity) {

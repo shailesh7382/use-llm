@@ -3,6 +3,7 @@ package com.usellm.api.controller;
 import com.usellm.api.dto.ChatRequestDto;
 import com.usellm.api.dto.ChatResponseDto;
 import com.usellm.api.service.ChatService;
+import com.usellm.core.model.ConversationSummary;
 import com.usellm.core.model.Message;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -46,6 +47,13 @@ public class ChatController {
     @GetMapping("/conversations/{conversationId}/history")
     public ResponseEntity<List<Message>> getHistory(@PathVariable String conversationId) {
         return ResponseEntity.ok(chatService.getHistory(conversationId));
+    }
+
+    /** List recent conversations. GET /api/v1/chat/conversations?limit=50 */
+    @GetMapping("/conversations")
+    public ResponseEntity<List<ConversationSummary>> listConversations(
+            @RequestParam(required = false, defaultValue = "50") Integer limit) {
+        return ResponseEntity.ok(chatService.listConversations(limit));
     }
 
     /** Clear conversation messages. DELETE /api/v1/chat/conversations/{conversationId}/messages */
