@@ -1,0 +1,690 @@
+{
+  "info": {
+    "_postman_id": "2df2f730-276f-4ab5-a59d-31fc8589ea9f",
+    "name": "use-llm API tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Exhaustive Newman regression checks for use-llm-api endpoints."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get('runId')) pm.environment.set('runId', String(Date.now()));",
+          "if (!pm.environment.get('conversationId')) pm.environment.set('conversationId', '');"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Models - list (query + limit)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/models?query={{searchQuery}}&limit=5",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "models"
+          ],
+          "query": [
+            {
+              "key": "query",
+              "value": "{{searchQuery}}"
+            },
+            {
+              "key": "limit",
+              "value": "5"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('request succeeds', function () {",
+              "  pm.expect(pm.response.code).to.be.a('number');",
+              "});",
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.test('response is an array', function () {",
+              "    pm.expect(Array.isArray(body)).to.eql(true);",
+              "  });",
+              "  if (Array.isArray(body) && body.length > 0 && body[0].id) {",
+              "    pm.environment.set('modelId', body[0].id);",
+              "  }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Models - list (default params)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/models",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "models"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.test('response is an array', function () {",
+              "    pm.expect(Array.isArray(body)).to.eql(true);",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Models - get by id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/models/{{modelId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "models",
+            "{{modelId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200, 400, or 404', function () {",
+              "  pm.expect([200, 400, 404]).to.include(pm.response.code);",
+              "});",
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.test('response is object', function () {",
+              "    pm.expect(body).to.be.an('object');",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Models - search (POST)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"{{searchQuery}}\",\n  \"ownedBy\": \"{{searchOwnedBy}}\",\n  \"limit\": 5\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/models/search",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "models",
+            "search"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.test('response is array', function () {",
+              "    pm.expect(Array.isArray(body)).to.eql(true);",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Completions - non streaming",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{modelId}}\",\n  \"prompt\": \"{{autocompletePrompt}}\",\n  \"maxTokens\": 50,\n  \"temperature\": 0.3\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/completions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "completions"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('response is JSON', function () {",
+              "  const contentType = pm.response.headers.get('Content-Type') || '';",
+              "  pm.expect(contentType).to.include('application/json');",
+              "});",
+              "pm.test('response body is not empty', function () {",
+              "  pm.expect((pm.response.text() || '').length).to.be.greaterThan(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Completions - stream endpoint",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{modelId}}\",\n  \"prompt\": \"{{autocompletePrompt}}\",\n  \"maxTokens\": 20,\n  \"temperature\": 0.2,\n  \"stream\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/completions/stream",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "completions",
+            "stream"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('content type is event stream', function () {",
+              "  const contentType = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+              "  pm.expect(contentType).to.include('text/event-stream');",
+              "});",
+              "pm.test('stream payload is not empty', function () {",
+              "  pm.expect((pm.response.text() || '').length).to.be.greaterThan(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Completions - validation error when model missing",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"prompt\": \"{{autocompletePrompt}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/completions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "completions"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 400', function () {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.test('error shape is standard', function () {",
+              "  pm.expect(body.status).to.eql(400);",
+              "  pm.expect(body.type).to.eql('validation_error');",
+              "  pm.expect(body.message).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Chat - create completion",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{modelId}}\",\n  \"message\": \"{{chatMessage}}\",\n  \"temperature\": 0.7,\n  \"maxTokens\": 256\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chat/completions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "chat",
+            "completions"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.test('conversation id exists', function () {",
+              "  pm.expect(body.conversationId).to.be.a('string').and.not.empty;",
+              "});",
+              "pm.test('response content exists', function () {",
+              "  pm.expect(body.content).to.be.a('string');",
+              "});",
+              "pm.environment.set('conversationId', body.conversationId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Chat - same conversation follow-up",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"model\": \"{{modelId}}\",\n  \"message\": \"Give one short follow-up sentence.\",\n  \"temperature\": 0.4,\n  \"maxTokens\": 128\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chat/completions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "chat",
+            "completions"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.test('conversation id reused', function () {",
+              "  pm.expect(body.conversationId).to.eql(pm.environment.get('conversationId'));",
+              "});",
+              "pm.test('memory size has grown', function () {",
+              "  pm.expect(body.memorySize).to.be.a('number');",
+              "  pm.expect(body.memorySize).to.be.greaterThan(2);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Chat - stream endpoint",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"model\": \"{{modelId}}\",\n  \"message\": \"Reply with exactly five words.\",\n  \"stream\": true,\n  \"maxTokens\": 32\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chat/completions/stream",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "chat",
+            "completions",
+            "stream"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('content type is event stream', function () {",
+              "  const contentType = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+              "  pm.expect(contentType).to.include('text/event-stream');",
+              "});",
+              "pm.test('stream payload is not empty', function () {",
+              "  pm.expect((pm.response.text() || '').length).to.be.greaterThan(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Chat - get history",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chat/conversations/{{conversationId}}/history",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "chat",
+            "conversations",
+            "{{conversationId}}",
+            "history"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.test('history is an array', function () {",
+              "  pm.expect(Array.isArray(body)).to.eql(true);",
+              "});",
+              "pm.test('history contains multiple messages', function () {",
+              "  pm.expect(body.length).to.be.greaterThan(2);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Chat - validation error when message missing",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{modelId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chat/completions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "chat",
+            "completions"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 400', function () {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.test('error shape is standard', function () {",
+              "  pm.expect(body.status).to.eql(400);",
+              "  pm.expect(body.type).to.eql('validation_error');",
+              "  pm.expect(body.message).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Chat - clear conversation messages",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chat/conversations/{{conversationId}}/messages",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "chat",
+            "conversations",
+            "{{conversationId}}",
+            "messages"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.test('status set to cleared', function () {",
+              "  pm.expect(body.status).to.eql('cleared');",
+              "  pm.expect(body.conversationId).to.eql(pm.environment.get('conversationId'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - Chat - history after clear",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chat/conversations/{{conversationId}}/history",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "chat",
+            "conversations",
+            "{{conversationId}}",
+            "history"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.test('history is empty after clear', function () {",
+              "  pm.expect(Array.isArray(body)).to.eql(true);",
+              "  pm.expect(body.length).to.eql(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - Chat - delete conversation",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chat/conversations/{{conversationId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "chat",
+            "conversations",
+            "{{conversationId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.test('status set to deleted', function () {",
+              "  pm.expect(body.status).to.eql('deleted');",
+              "  pm.expect(body.conversationId).to.eql(pm.environment.get('conversationId'));",
+              "});",
+              "pm.environment.set('conversationId', '');"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "id": "a4fef9c7-9c8c-48e7-8877-5a5fb02672af",
+  "name": "use-llm-local",
+  "values": [
+	{
+	  "key": "baseUrl",
+	  "value": "http://localhost:8080",
+	  "type": "default",
+	  "enabled": true
+	},
+	{
+	  "key": "modelId",
+	  "value": "llama3",
+	  "type": "default",
+	  "enabled": true
+	},
+	{
+	  "key": "chatMessage",
+	  "value": "What is the speed of light?",
+	  "type": "default",
+	  "enabled": true
+	},
+	{
+	  "key": "autocompletePrompt",
+	  "value": "The capital of France is",
+	  "type": "default",
+	  "enabled": true
+	},
+	{
+	  "key": "searchQuery",
+	  "value": "llama",
+	  "type": "default",
+	  "enabled": true
+	},
+	{
+	  "key": "searchOwnedBy",
+	  "value": "meta",
+	  "type": "default",
+	  "enabled": true
+	},
+	{
+	  "key": "conversationId",
+	  "value": "",
+	  "type": "default",
+	  "enabled": true
+	}
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_at": "2026-05-11T00:00:00.000Z",
+  "_postman_exported_using": "Postman/11"
+}
+

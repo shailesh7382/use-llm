@@ -8,9 +8,9 @@
 # For Ollama (default port 11434)
 llm:
   client:
-    base-url: http://localhost:11434/v1
-    api-key: ollama
-    default-model: llama3
+    base-url: http://localhost:1234/v1
+    api-key: lm-studio
+    default-model: mistralai/devstral-small-2-2512
 
 logging:
   level:
