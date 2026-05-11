@@ -42,6 +42,90 @@ llm:
     strategy: TOKEN_AWARE
     system-prompt: "You are a helpful, knowledgeable, and concise AI assistant."
     persistent: true
+    alignment-strategy: AUTO_FIX   # STRICT | AUTO_FIX | WARN_ONLY
+
+  # Prompt template config
+  prompt:
+    alignment-strategy: AUTO_FIX
+    built-in-templates:
+
+      - id: code-assistant
+        name: "Code Assistant"
+        description: "Expert coding assistant with best-practice guidance"
+        persona: "You are an expert software engineer with deep knowledge of algorithms, design patterns, and multiple programming languages."
+        system-prompt: "Write clean, efficient, well-commented code. Explain your reasoning. Consider edge cases and error handling. Prefer idiomatic constructs for the target language."
+        user-prompt-template: "{{task}}"
+        output-format: "Use markdown fenced code blocks with the language tag (e.g. ```java). Briefly explain your approach before the code block."
+        variables:
+          - name: task
+            description: "The coding task, question, or code to review"
+            required: true
+
+      - id: qa-assistant
+        name: "Q&A Assistant"
+        description: "Factual question-answering with source awareness"
+        persona: "You are a knowledgeable expert who provides clear, accurate, and well-structured answers."
+        system-prompt: "Answer questions directly and concisely. If you are uncertain, say so. Cite relevant concepts, principles, or examples to support your answer."
+        user-prompt-template: "Question: {{question}}\n\nContext: {{context}}"
+        output-format: "Provide a direct answer first (1–3 sentences), followed by supporting details, examples, or reasoning."
+        variables:
+          - name: question
+            description: "The question to answer"
+            required: true
+          - name: context
+            description: "Optional background context that helps answer the question"
+            required: false
+            default-value: "(no additional context provided)"
+
+      - id: summarizer
+        name: "Summarizer"
+        description: "Condenses text to a configurable level of detail"
+        persona: "You are a skilled technical writer who creates precise, accurate summaries that preserve the key points of the original."
+        system-prompt: "Summarise the provided text faithfully. Do not add information that is not present in the source. Retain important numbers, names, and conclusions."
+        user-prompt-template: "Summarise the following text at a {{detail}} level of detail:\n\n{{text}}"
+        output-format: "Start with a one-sentence TL;DR. Follow with a structured summary using bullet points for key points when the detail level is 'medium' or 'detailed'."
+        variables:
+          - name: text
+            description: "The text to summarise"
+            required: true
+          - name: detail
+            description: "Level of detail: brief | medium | detailed"
+            required: false
+            default-value: "medium"
+
+      - id: translator
+        name: "Translator"
+        description: "Professional translation between any two languages"
+        persona: "You are a professional linguist and certified translator with expertise across many languages and cultural nuances."
+        system-prompt: "Produce natural, idiomatic translations. Preserve the tone, register, and formatting of the original. Do not paraphrase unless the literal translation would be nonsensical."
+        user-prompt-template: "Translate the following text from {{source_lang}} to {{target_lang}}:\n\n{{text}}"
+        output-format: "Output only the translated text. If a term has no direct equivalent, provide the closest translation with a brief parenthetical explanation."
+        variables:
+          - name: text
+            description: "The text to translate"
+            required: true
+          - name: source_lang
+            description: "Source language (e.g. English, French, Japanese)"
+            required: true
+          - name: target_lang
+            description: "Target language (e.g. Spanish, German, Korean)"
+            required: true
+
+      - id: sql-helper
+        name: "SQL Helper"
+        description: "Generates, explains, and optimises SQL queries"
+        persona: "You are a senior database engineer with expertise in SQL query optimisation, schema design, indexing strategies, and data analytics."
+        system-prompt: "Generate correct, efficient SQL that adheres to standard SQL-92 unless a dialect is specified. Consider indexes, joins, and performance. Explain any non-obvious decisions."
+        user-prompt-template: "Database schema:\n{{schema}}\n\nTask: {{task}}"
+        output-format: "Provide the SQL in a fenced ```sql code block. Follow with a brief explanation of what the query does and any important caveats (e.g. missing indexes, large table scans)."
+        variables:
+          - name: task
+            description: "The SQL task or question (e.g. 'find all users who signed up last month')"
+            required: true
+          - name: schema
+            description: "Optional table definitions or ERD description"
+            required: false
+            default-value: "(no schema provided — write generic SQL)"
 
 # Actuator
 management:

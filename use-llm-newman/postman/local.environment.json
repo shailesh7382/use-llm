@@ -10,7 +10,7 @@
 	},
 	{
 	  "key": "modelId",
-	  "value": "llama3",
+	  "value": "mistralai/devstral-small-2-2512",
 	  "type": "default",
 	  "enabled": true
 	},

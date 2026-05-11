@@ -32,6 +32,17 @@ public class MemoryConfig {
      */
     private boolean persistent = true;
 
+    /**
+     * Message alignment strategy applied before sending messages to the LLM.
+     * Values: STRICT | AUTO_FIX | WARN_ONLY
+     * <ul>
+     *   <li>STRICT    – throw an exception if alignment rules are violated</li>
+     *   <li>AUTO_FIX  – silently repair violations (merge consecutive same-role, reorder system)</li>
+     *   <li>WARN_ONLY – log warnings but send messages as-is</li>
+     * </ul>
+     */
+    private String alignmentStrategy = "AUTO_FIX";
+
     public int getMaxMessages() { return maxMessages; }
     public void setMaxMessages(int maxMessages) { this.maxMessages = maxMessages; }
     public int getMaxTokens() { return maxTokens; }
@@ -42,4 +53,6 @@ public class MemoryConfig {
     public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
     public boolean isPersistent() { return persistent; }
     public void setPersistent(boolean persistent) { this.persistent = persistent; }
+    public String getAlignmentStrategy() { return alignmentStrategy; }
+    public void setAlignmentStrategy(String alignmentStrategy) { this.alignmentStrategy = alignmentStrategy; }
 }
