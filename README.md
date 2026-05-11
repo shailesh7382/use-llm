@@ -166,6 +166,29 @@ DELETE /api/v1/chat/conversations/{conversationId}
 
 ---
 
+### Release Notes
+
+#### Generate release notes from a git branch
+```http
+POST /api/v1/release-notes
+Content-Type: application/json
+
+{
+  "repoPath": "/absolute/path/to/git/repo",
+  "branch": "feature/release-notes",
+  "baseRef": "main",
+  "model": "mistralai/devstral-small-2-2512",
+  "maxCommits": 20,
+  "maxDiffCharacters": 6000
+}
+```
+
+The API reads commits from the requested git branch, analyzes each commit message and diff individually, and then uses the configured LLM to turn those commit analyses into polished markdown release notes. If `baseRef` is omitted, the API will try to compare the branch against the repository default branch (`origin/HEAD`, `main`, or `master`) and otherwise fall back to the latest commits on the branch.
+
+For safety, the API only reads repositories under the configured `llm.release-notes.allowed-repo-roots` paths.
+
+---
+
 ## Memory Management
 
 The system uses three configurable memory strategies:
