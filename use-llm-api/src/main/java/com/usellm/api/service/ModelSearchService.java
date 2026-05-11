@@ -29,7 +29,7 @@ public class ModelSearchService {
                     if (request.getQuery() != null && !request.getQuery().isBlank()) {
                         String q = request.getQuery().toLowerCase();
                         filtered = filtered.stream()
-                                .filter(m -> m.getId() != null && m.getId().toLowerCase().contains(q)
+                                .filter(m -> (m.getId() != null && m.getId().toLowerCase().contains(q))
                                         || (m.getDescription() != null && m.getDescription().toLowerCase().contains(q)))
                                 .collect(Collectors.toList());
                     }
