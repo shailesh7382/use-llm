@@ -2,13 +2,12 @@ package com.usellm.api.service;
 
 import com.usellm.api.dto.ChatRequestDto;
 import com.usellm.api.dto.ChatResponseDto;
-import com.usellm.client.config.LLMClientConfig;
 import com.usellm.core.model.*;
 import com.usellm.core.port.LLMPort;
 import com.usellm.core.port.MemoryPort;
 import com.usellm.memory.config.MemoryConfig;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -16,31 +15,30 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.UUID;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class ChatService {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
 
     private final LLMPort llmPort;
     private final MemoryPort memoryPort;
     private final MemoryConfig memoryConfig;
-    private final LLMClientConfig clientConfig;
 
-    /**
-     * Perform a chat interaction with memory management.
-     */
+    public ChatService(LLMPort llmPort, MemoryPort memoryPort, MemoryConfig memoryConfig) {
+        this.llmPort = llmPort;
+        this.memoryPort = memoryPort;
+        this.memoryConfig = memoryConfig;
+    }
+
+    /** Perform a chat interaction with memory management. */
     public Mono<ChatResponseDto> chat(ChatRequestDto requestDto) {
         String conversationId = resolveConversationId(requestDto.getConversationId());
         log.info("Chat request: conversationId={}, model={}", conversationId, requestDto.getModel());
 
-        // Initialize conversation with system prompt if new
         initializeConversationIfNew(conversationId, requestDto.getSystemPrompt());
 
-        // Add user message to memory
-        Message userMessage = Message.user(requestDto.getMessage());
-        memoryPort.addMessage(conversationId, userMessage);
+        memoryPort.addMessage(conversationId, Message.user(requestDto.getMessage()));
 
-        // Build context-aware message list from memory
         List<Message> contextMessages = buildContextMessages(conversationId);
 
         ChatRequest chatRequest = ChatRequest.builder()
@@ -54,27 +52,20 @@ public class ChatService {
 
         return llmPort.chat(chatRequest)
                 .map(response -> {
-                    // Extract assistant reply and persist to memory
                     String assistantContent = extractContent(response);
-                    Message assistantMessage = Message.assistant(assistantContent);
-                    memoryPort.addMessage(conversationId, assistantMessage);
-
+                    memoryPort.addMessage(conversationId, Message.assistant(assistantContent));
                     return buildResponseDto(conversationId, response, assistantContent);
                 })
                 .doOnError(e -> log.error("Chat error for conversation {}: {}", conversationId, e.getMessage()));
     }
 
-    /**
-     * Streaming chat with memory management.
-     */
+    /** Streaming chat with memory management. */
     public Flux<ChatResponseDto> streamChat(ChatRequestDto requestDto) {
         String conversationId = resolveConversationId(requestDto.getConversationId());
         log.info("Streaming chat: conversationId={}, model={}", conversationId, requestDto.getModel());
 
         initializeConversationIfNew(conversationId, requestDto.getSystemPrompt());
-
-        Message userMessage = Message.user(requestDto.getMessage());
-        memoryPort.addMessage(conversationId, userMessage);
+        memoryPort.addMessage(conversationId, Message.user(requestDto.getMessage()));
 
         List<Message> contextMessages = buildContextMessages(conversationId);
 
@@ -102,7 +93,6 @@ public class ChatService {
                             .build();
                 })
                 .doOnComplete(() -> {
-                    // Persist full response to memory after stream completes
                     if (fullResponse.length() > 0) {
                         memoryPort.addMessage(conversationId, Message.assistant(fullResponse.toString()));
                         log.debug("Persisted streamed response to memory for {}", conversationId);
@@ -111,24 +101,18 @@ public class ChatService {
                 .doOnError(e -> log.error("Stream chat error for {}: {}", conversationId, e.getMessage()));
     }
 
-    /**
-     * Get conversation history.
-     */
+    /** Get conversation history. */
     public List<Message> getHistory(String conversationId) {
         return memoryPort.getMessages(conversationId);
     }
 
-    /**
-     * Clear conversation memory.
-     */
+    /** Clear conversation memory. */
     public void clearConversation(String conversationId) {
         log.info("Clearing conversation {}", conversationId);
         memoryPort.clearConversation(conversationId);
     }
 
-    /**
-     * Delete a conversation entirely.
-     */
+    /** Delete a conversation entirely. */
     public void deleteConversation(String conversationId) {
         log.info("Deleting conversation {}", conversationId);
         memoryPort.deleteConversation(conversationId);
@@ -149,8 +133,7 @@ public class ChatService {
     }
 
     private List<Message> buildContextMessages(String conversationId) {
-        String strategy = memoryConfig.getStrategy();
-        return switch (strategy.toUpperCase()) {
+        return switch (memoryConfig.getStrategy().toUpperCase()) {
             case "SLIDING_WINDOW" -> memoryPort.getRecentMessages(conversationId, memoryConfig.getMaxMessages());
             case "TOKEN_AWARE" -> memoryPort.getMessagesWithinTokenBudget(conversationId, memoryConfig.getMaxTokens());
             default -> memoryPort.getMessages(conversationId);

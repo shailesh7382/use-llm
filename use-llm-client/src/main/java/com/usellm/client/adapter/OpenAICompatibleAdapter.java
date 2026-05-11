@@ -1,10 +1,11 @@
 package com.usellm.client.adapter;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.usellm.core.exception.LLMException;
 import com.usellm.core.model.*;
 import com.usellm.core.port.LLMPort;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -16,13 +17,17 @@ import reactor.util.retry.Retry;
 
 import java.time.Duration;
 
-@Slf4j
 @Component
-@RequiredArgsConstructor
 public class OpenAICompatibleAdapter implements LLMPort {
 
-    @Qualifier("llmWebClient")
+    private static final Logger log = LoggerFactory.getLogger(OpenAICompatibleAdapter.class);
+
     private final WebClient webClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public OpenAICompatibleAdapter(@Qualifier("llmWebClient") WebClient webClient) {
+        this.webClient = webClient;
+    }
 
     @Override
     public Mono<ModelListResponse> listModels() {
@@ -49,10 +54,8 @@ public class OpenAICompatibleAdapter implements LLMPort {
     @Override
     public Mono<CompletionResponse> complete(CompletionRequest request) {
         log.debug("Sending completion request for model: {}", request.getModel());
-        CompletionRequest nonStreaming = request;
-        if (Boolean.TRUE.equals(request.getStream())) {
-            nonStreaming = copyWithStream(request, false);
-        }
+        CompletionRequest nonStreaming = Boolean.TRUE.equals(request.getStream())
+                ? copyWithStream(request, false) : request;
         return webClient.post()
                 .uri("/completions")
                 .bodyValue(nonStreaming)
@@ -83,10 +86,8 @@ public class OpenAICompatibleAdapter implements LLMPort {
     @Override
     public Mono<ChatResponse> chat(ChatRequest request) {
         log.debug("Sending chat request for model: {}", request.getModel());
-        ChatRequest nonStreaming = request;
-        if (Boolean.TRUE.equals(request.getStream())) {
-            nonStreaming = copyWithStream(request, false);
-        }
+        ChatRequest nonStreaming = Boolean.TRUE.equals(request.getStream())
+                ? copyWithStream(request, false) : request;
         return webClient.post()
                 .uri("/chat/completions")
                 .bodyValue(nonStreaming)
@@ -116,11 +117,7 @@ public class OpenAICompatibleAdapter implements LLMPort {
 
     private LLMException mapError(WebClientResponseException e) {
         log.error("LLM API error {}: {}", e.getStatusCode().value(), e.getResponseBodyAsString());
-        return new LLMException(
-                "LLM API error: " + e.getMessage(),
-                e.getStatusCode().value(),
-                "api_error"
-        );
+        return new LLMException("LLM API error: " + e.getMessage(), e.getStatusCode().value(), "api_error");
     }
 
     private CompletionRequest copyWithStream(CompletionRequest req, boolean stream) {
@@ -152,8 +149,7 @@ public class OpenAICompatibleAdapter implements LLMPort {
 
     private Mono<CompletionResponse> parseCompletionChunk(String json) {
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            return Mono.just(mapper.readValue(json, CompletionResponse.class));
+            return Mono.just(objectMapper.readValue(json, CompletionResponse.class));
         } catch (Exception e) {
             log.warn("Failed to parse completion chunk: {}", e.getMessage());
             return Mono.empty();
@@ -162,8 +158,7 @@ public class OpenAICompatibleAdapter implements LLMPort {
 
     private Mono<ChatResponse> parseChatChunk(String json) {
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            return Mono.just(mapper.readValue(json, ChatResponse.class));
+            return Mono.just(objectMapper.readValue(json, ChatResponse.class));
         } catch (Exception e) {
             log.warn("Failed to parse chat chunk: {}", e.getMessage());
             return Mono.empty();

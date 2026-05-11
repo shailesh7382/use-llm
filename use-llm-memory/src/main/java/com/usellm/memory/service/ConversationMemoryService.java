@@ -8,8 +8,8 @@ import com.usellm.memory.entity.ConversationEntity;
 import com.usellm.memory.entity.MessageEntity;
 import com.usellm.memory.repository.ConversationRepository;
 import com.usellm.memory.repository.MessageRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,10 +21,10 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class ConversationMemoryService implements MemoryPort {
+
+    private static final Logger log = LoggerFactory.getLogger(ConversationMemoryService.class);
 
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
@@ -33,12 +33,19 @@ public class ConversationMemoryService implements MemoryPort {
     // In-memory cache for fast access
     private final ConcurrentHashMap<String, LinkedList<Message>> cache = new ConcurrentHashMap<>();
 
+    public ConversationMemoryService(ConversationRepository conversationRepository,
+                                     MessageRepository messageRepository,
+                                     MemoryConfig memoryConfig) {
+        this.conversationRepository = conversationRepository;
+        this.messageRepository = messageRepository;
+        this.memoryConfig = memoryConfig;
+    }
+
     @Override
     @Transactional
     public void addMessage(String conversationId, Message message) {
         log.debug("Adding message to conversation {}: role={}", conversationId, message.getRole());
 
-        // Ensure conversation exists
         ConversationEntity conversation = conversationRepository.findById(conversationId)
                 .orElseGet(() -> {
                     ConversationEntity newConv = ConversationEntity.builder()
@@ -66,7 +73,6 @@ public class ConversationMemoryService implements MemoryPort {
 
         messageRepository.save(entity);
 
-        // Update cache
         cache.computeIfAbsent(conversationId, k -> new LinkedList<>()).addLast(message);
 
         log.debug("Message added at position {} with ~{} tokens", nextPosition, tokenCount);
@@ -75,7 +81,6 @@ public class ConversationMemoryService implements MemoryPort {
     @Override
     @Transactional(readOnly = true)
     public List<Message> getMessages(String conversationId) {
-        // Check cache first
         if (cache.containsKey(conversationId)) {
             return Collections.unmodifiableList(new ArrayList<>(cache.get(conversationId)));
         }
@@ -96,7 +101,6 @@ public class ConversationMemoryService implements MemoryPort {
         if (all.size() <= maxMessages) {
             return all;
         }
-        // Always include system message if first message is system
         List<Message> trimmed = new ArrayList<>();
         if (!all.isEmpty() && all.get(0).getRole() == Role.SYSTEM) {
             trimmed.add(all.get(0));
@@ -119,7 +123,6 @@ public class ConversationMemoryService implements MemoryPort {
         List<Message> result = new LinkedList<>();
         int totalTokens = 0;
 
-        // Always keep system message
         int startIdx = 0;
         if (!all.isEmpty() && all.get(0).getRole() == Role.SYSTEM) {
             Message systemMsg = all.get(0);
@@ -128,7 +131,6 @@ public class ConversationMemoryService implements MemoryPort {
             startIdx = 1;
         }
 
-        // Add messages from the end (most recent first) until budget exhausted
         List<Message> nonSystem = all.subList(startIdx, all.size());
         LinkedList<Message> recent = new LinkedList<>();
         for (int i = nonSystem.size() - 1; i >= 0; i--) {

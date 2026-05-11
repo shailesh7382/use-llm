@@ -5,20 +5,24 @@ import com.usellm.core.exception.ModelNotFoundException;
 import com.usellm.core.model.LLMModel;
 import com.usellm.core.model.ModelListResponse;
 import com.usellm.core.port.LLMPort;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class ModelSearchService {
 
+    private static final Logger log = LoggerFactory.getLogger(ModelSearchService.class);
+
     private final LLMPort llmPort;
+
+    public ModelSearchService(LLMPort llmPort) {
+        this.llmPort = llmPort;
+    }
 
     public Mono<List<LLMModel>> searchModels(ModelSearchRequestDto request) {
         log.debug("Searching models with query={}, ownedBy={}", request.getQuery(), request.getOwnedBy());
