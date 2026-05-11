@@ -199,6 +199,11 @@ public class ChatService {
         memoryPort.deleteConversation(conversationId);
     }
 
+    /** List conversations ordered by recent activity. */
+    public List<ConversationSummary> listConversations(int limit) {
+        return memoryPort.listConversations(limit);
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------

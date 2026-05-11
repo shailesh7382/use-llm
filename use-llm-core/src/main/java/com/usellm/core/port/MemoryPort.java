@@ -1,6 +1,7 @@
 package com.usellm.core.port;
 
 import com.usellm.core.model.Message;
+import com.usellm.core.model.ConversationSummary;
 
 import java.util.List;
 
@@ -26,4 +27,6 @@ public interface MemoryPort {
     int getMessageCount(String conversationId);
 
     int estimateTotalTokens(String conversationId);
+
+    List<ConversationSummary> listConversations(int limit);
 }
