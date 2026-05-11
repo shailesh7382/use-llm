@@ -7,7 +7,9 @@ import com.usellm.core.port.LLMPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -83,13 +85,18 @@ public class OpenAICompatibleAdapter implements LLMPort {
         return webClient.post()
                 .uri("/completions")
                 .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.TEXT_EVENT_STREAM)
                 .bodyValue(streaming)
                 .retrieve()
-                .bodyToFlux(String.class)
+                .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
                 .doOnSubscribe(s -> log.info("Streaming completion SSE connection established: model={}", request.getModel()))
-                .filter(line -> line.startsWith("data: ") && !line.equals("data: [DONE]"))
-                .map(line -> line.substring(6))
+                .filter(sse -> sse.data() != null && !"[DONE]".equals(sse.data()))
+                .map(ServerSentEvent::data)
                 .flatMap(this::parseCompletionChunk)
+                .doOnNext(chunk -> log.debug("Completion chunk: model={}, text={}",
+                        request.getModel(),
+                        chunk.getChoices() != null && !chunk.getChoices().isEmpty()
+                                ? chunk.getChoices().get(0).getText() : ""))
                 .doOnComplete(() -> log.info("Streaming completion finished: model={}", request.getModel()))
                 .doOnError(e -> log.error("Stream completion error: {}", e.getMessage()));
     }
@@ -130,13 +137,19 @@ public class OpenAICompatibleAdapter implements LLMPort {
         return webClient.post()
                 .uri("/chat/completions")
                 .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.TEXT_EVENT_STREAM)
                 .bodyValue(streaming)
                 .retrieve()
-                .bodyToFlux(String.class)
+                .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
                 .doOnSubscribe(s -> log.info("Streaming chat SSE connection established: model={}", request.getModel()))
-                .filter(line -> line.startsWith("data: ") && !line.equals("data: [DONE]"))
-                .map(line -> line.substring(6))
+                .filter(sse -> sse.data() != null && !"[DONE]".equals(sse.data()))
+                .map(ServerSentEvent::data)
                 .flatMap(this::parseChatChunk)
+                .doOnNext(chunk -> log.debug("Chat chunk: model={}, delta={}",
+                        request.getModel(),
+                        chunk.getChoices() != null && !chunk.getChoices().isEmpty()
+                                && chunk.getChoices().get(0).getDelta() != null
+                                ? chunk.getChoices().get(0).getDelta().getContent() : ""))
                 .doOnComplete(() -> log.info("Streaming chat finished: model={}", request.getModel()))
                 .doOnError(e -> log.error("Stream chat error: {}", e.getMessage()));
     }
