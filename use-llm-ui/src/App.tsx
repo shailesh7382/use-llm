@@ -542,7 +542,7 @@ function App() {
               <button type="button" onClick={refreshConversations}>GET /chat/conversations</button>
             </div>
             <div className="actions">
-              <button type="button" onClick={loadHistory}>GET history</button>
+              <button type="button" onClick={() => void loadHistory()}>GET history</button>
               <button type="button" onClick={clearConversationMessages}>DELETE messages</button>
               <button type="button" onClick={deleteConversation}>DELETE conversation</button>
             </div>

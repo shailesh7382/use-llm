@@ -15,7 +15,8 @@ use-llm/                    ← Parent Maven POM
 ├── use-llm-core/           ← Domain models, port interfaces, exceptions
 ├── use-llm-memory/         ← Conversation memory (H2 JPA + in-memory cache)
 ├── use-llm-client/         ← OpenAI-compatible WebClient adapter
-└── use-llm-api/            ← Spring Boot REST API (entry point)
+├── use-llm-api/            ← Spring Boot REST API (entry point)
+└── use-llm-ui/             ← React 19 + Vite advanced API console
 ```
 
 ---
@@ -55,6 +56,16 @@ mvn spring-boot:run
 ```
 
 The API starts on `http://localhost:8080`.
+
+### 4. Run the React 19 UI module
+
+```bash
+cd use-llm-ui
+npm install
+npm run dev
+```
+
+The UI starts on `http://localhost:5173` and can call all API endpoints from a professional tabbed console.
 
 ---
 
@@ -152,6 +163,11 @@ Content-Type: application/json
 #### Get conversation history
 ```http
 GET /api/v1/chat/conversations/{conversationId}/history
+```
+
+#### List recent conversations
+```http
+GET /api/v1/chat/conversations?limit=50
 ```
 
 #### Clear conversation messages
