@@ -46,10 +46,11 @@ public class ConversationMemoryService implements MemoryPort {
     @Override
     @Transactional
     public void addMessage(String conversationId, Message message) {
-        log.debug("Adding message to conversation {}: role={}", conversationId, message.getRole());
+        boolean isNew = !cache.containsKey(conversationId) && !conversationRepository.existsById(conversationId);
 
         ConversationEntity conversation = conversationRepository.findById(conversationId)
                 .orElseGet(() -> {
+                    log.info("Creating new conversation entity: conversationId={}", conversationId);
                     ConversationEntity newConv = ConversationEntity.builder()
                             .conversationId(conversationId)
                             .createdAt(Instant.now())
@@ -77,22 +78,27 @@ public class ConversationMemoryService implements MemoryPort {
 
         cache.computeIfAbsent(conversationId, k -> new LinkedList<>()).addLast(message);
 
-        log.debug("Message added at position {} with ~{} tokens", nextPosition, tokenCount);
+        log.info("Message added: conversationId={}, role={}, position={}, estimatedTokens={}, isNewConversation={}",
+                conversationId, message.getRole(), nextPosition, tokenCount, isNew);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Message> getMessages(String conversationId) {
         if (cache.containsKey(conversationId)) {
-            return Collections.unmodifiableList(new ArrayList<>(cache.get(conversationId)));
+            List<Message> cached = Collections.unmodifiableList(new ArrayList<>(cache.get(conversationId)));
+            log.info("Messages retrieved from cache: conversationId={}, count={}", conversationId, cached.size());
+            return cached;
         }
 
+        log.info("Cache miss — loading messages from DB: conversationId={}", conversationId);
         List<MessageEntity> entities = messageRepository.findByConversationId(conversationId);
         List<Message> messages = entities.stream()
                 .map(this::toMessage)
                 .collect(Collectors.toList());
 
         cache.put(conversationId, new LinkedList<>(messages));
+        log.info("Messages loaded from DB and cached: conversationId={}, count={}", conversationId, messages.size());
         return Collections.unmodifiableList(messages);
     }
 
@@ -101,6 +107,8 @@ public class ConversationMemoryService implements MemoryPort {
     public List<Message> getRecentMessages(String conversationId, int maxMessages) {
         List<Message> all = getMessages(conversationId);
         if (all.size() <= maxMessages) {
+            log.info("Sliding-window: conversationId={}, all {} message(s) fit within window={}",
+                    conversationId, all.size(), maxMessages);
             return all;
         }
         List<Message> trimmed = new ArrayList<>();
@@ -113,6 +121,8 @@ public class ConversationMemoryService implements MemoryPort {
             int startIdx = Math.max(0, all.size() - maxMessages);
             trimmed.addAll(all.subList(startIdx, all.size()));
         }
+        log.info("Sliding-window trimmed: conversationId={}, from {} to {} message(s) (window={})",
+                conversationId, all.size(), trimmed.size(), maxMessages);
         return Collections.unmodifiableList(trimmed);
     }
 
@@ -120,7 +130,10 @@ public class ConversationMemoryService implements MemoryPort {
     @Transactional(readOnly = true)
     public List<Message> getMessagesWithinTokenBudget(String conversationId, int maxTokens) {
         List<Message> all = getMessages(conversationId);
-        if (all.isEmpty()) return Collections.emptyList();
+        if (all.isEmpty()) {
+            log.info("Token-aware memory: conversationId={}, no messages found", conversationId);
+            return Collections.emptyList();
+        }
 
         List<Message> result = new LinkedList<>();
         int totalTokens = 0;
@@ -144,55 +157,72 @@ public class ConversationMemoryService implements MemoryPort {
         }
         result.addAll(recent);
 
-        log.debug("Token-aware memory: returning {}/{} messages (~{} tokens)", result.size(), all.size(), totalTokens);
+        log.info("Token-aware memory: conversationId={}, returning {}/{} message(s), ~{} tokens (budget={})",
+                conversationId, result.size(), all.size(), totalTokens, maxTokens);
         return Collections.unmodifiableList(result);
     }
 
     @Override
     @Transactional
     public void clearConversation(String conversationId) {
-        log.info("Clearing conversation {}", conversationId);
+        log.info("Clearing conversation messages: conversationId={}", conversationId);
+        int count = messageRepository.findByConversationId(conversationId).size();
         messageRepository.findByConversationId(conversationId)
                 .forEach(messageRepository::delete);
         cache.remove(conversationId);
+        log.info("Conversation messages cleared: conversationId={}, removedMessages={}", conversationId, count);
     }
 
     @Override
     @Transactional
     public void deleteConversation(String conversationId) {
-        log.info("Deleting conversation {}", conversationId);
+        log.info("Deleting conversation: conversationId={}", conversationId);
         conversationRepository.deleteById(conversationId);
         cache.remove(conversationId);
+        log.info("Conversation deleted: conversationId={}", conversationId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public boolean conversationExists(String conversationId) {
-        return cache.containsKey(conversationId) || conversationRepository.existsById(conversationId);
+        boolean inCache = cache.containsKey(conversationId);
+        boolean inDb = !inCache && conversationRepository.existsById(conversationId);
+        boolean exists = inCache || inDb;
+        log.info("Conversation existence check: conversationId={}, exists={} (cacheHit={}, dbHit={})",
+                conversationId, exists, inCache, inDb);
+        return exists;
     }
 
     @Override
     @Transactional(readOnly = true)
     public int getMessageCount(String conversationId) {
+        int count;
         if (cache.containsKey(conversationId)) {
-            return cache.get(conversationId).size();
+            count = cache.get(conversationId).size();
+            log.info("Message count from cache: conversationId={}, count={}", conversationId, count);
+        } else {
+            count = messageRepository.countByConversationId(conversationId);
+            log.info("Message count from DB: conversationId={}, count={}", conversationId, count);
         }
-        return messageRepository.countByConversationId(conversationId);
+        return count;
     }
 
     @Override
     @Transactional(readOnly = true)
     public int estimateTotalTokens(String conversationId) {
-        return getMessages(conversationId).stream()
+        int total = getMessages(conversationId).stream()
                 .mapToInt(Message::estimateTokens)
                 .sum();
+        log.info("Estimated total tokens: conversationId={}, estimatedTokens={}", conversationId, total);
+        return total;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ConversationSummary> listConversations(int limit) {
         int safeLimit = limit > 0 ? limit : 50;
-        return conversationRepository.findAll(Sort.by(Sort.Direction.DESC, "updatedAt"))
+        log.info("Listing conversations: requestedLimit={}, effectiveLimit={}", limit, safeLimit);
+        List<ConversationSummary> result = conversationRepository.findAll(Sort.by(Sort.Direction.DESC, "updatedAt"))
                 .stream()
                 .limit(safeLimit)
                 .map(conv -> ConversationSummary.builder()
@@ -202,6 +232,8 @@ public class ConversationMemoryService implements MemoryPort {
                         .messageCount(getMessageCount(conv.getConversationId()))
                         .build())
                 .collect(Collectors.toList());
+        log.info("Conversations listed: count={}", result.size());
+        return result;
     }
 
     private Message toMessage(MessageEntity entity) {

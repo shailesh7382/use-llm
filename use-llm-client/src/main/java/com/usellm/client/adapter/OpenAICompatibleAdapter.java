@@ -31,29 +31,34 @@ public class OpenAICompatibleAdapter implements LLMPort {
 
     @Override
     public Mono<ModelListResponse> listModels() {
-        log.debug("Listing models from LLM server");
+        log.info("Requesting model list from LLM server");
         return webClient.get()
                 .uri("/models")
                 .retrieve()
                 .bodyToMono(ModelListResponse.class)
                 .retryWhen(Retry.backoff(2, Duration.ofMillis(500)))
+                .doOnSuccess(resp -> log.info("Model list received: count={}",
+                        resp.getData() != null ? resp.getData().size() : 0))
                 .doOnError(e -> log.error("Error listing models: {}", e.getMessage()))
                 .onErrorMap(WebClientResponseException.class, this::mapError);
     }
 
     @Override
     public Mono<LLMModel> getModel(String modelId) {
-        log.debug("Getting model: {}", modelId);
+        log.info("Requesting model details: modelId={}", modelId);
         return webClient.get()
                 .uri("/models/{model}", modelId)
                 .retrieve()
                 .bodyToMono(LLMModel.class)
+                .doOnSuccess(m -> log.info("Model details received: id={}, ownedBy={}", m.getId(), m.getOwnedBy()))
+                .doOnError(e -> log.error("Error fetching model {}: {}", modelId, e.getMessage()))
                 .onErrorMap(WebClientResponseException.class, this::mapError);
     }
 
     @Override
     public Mono<CompletionResponse> complete(CompletionRequest request) {
-        log.debug("Sending completion request for model: {}", request.getModel());
+        log.info("Sending completion request: model={}, maxTokens={}, temperature={}",
+                request.getModel(), request.getMaxTokens(), request.getTemperature());
         CompletionRequest nonStreaming = Boolean.TRUE.equals(request.getStream())
                 ? copyWithStream(request, false) : request;
         return webClient.post()
@@ -62,14 +67,18 @@ public class OpenAICompatibleAdapter implements LLMPort {
                 .retrieve()
                 .bodyToMono(CompletionResponse.class)
                 .retryWhen(Retry.backoff(2, Duration.ofMillis(500))
-                        .filter(e -> !(e instanceof WebClientResponseException.BadRequest)))
+                        .filter(e -> !(e instanceof WebClientResponseException.BadRequest))
+                        .doBeforeRetry(signal -> log.info("Retrying completion request (attempt {}): model={}",
+                                signal.totalRetries() + 1, request.getModel())))
+                .doOnSuccess(resp -> log.info("Completion response received: model={}, usage={}",
+                        resp.getModel() != null ? resp.getModel() : request.getModel(), resp.getUsage()))
                 .doOnError(e -> log.error("Completion error: {}", e.getMessage()))
                 .onErrorMap(WebClientResponseException.class, this::mapError);
     }
 
     @Override
     public Flux<CompletionResponse> streamComplete(CompletionRequest request) {
-        log.debug("Streaming completion for model: {}", request.getModel());
+        log.info("Sending streaming completion request: model={}, maxTokens={}", request.getModel(), request.getMaxTokens());
         CompletionRequest streaming = copyWithStream(request, true);
         return webClient.post()
                 .uri("/completions")
@@ -77,15 +86,20 @@ public class OpenAICompatibleAdapter implements LLMPort {
                 .bodyValue(streaming)
                 .retrieve()
                 .bodyToFlux(String.class)
+                .doOnSubscribe(s -> log.info("Streaming completion SSE connection established: model={}", request.getModel()))
                 .filter(line -> line.startsWith("data: ") && !line.equals("data: [DONE]"))
                 .map(line -> line.substring(6))
                 .flatMap(this::parseCompletionChunk)
+                .doOnComplete(() -> log.info("Streaming completion finished: model={}", request.getModel()))
                 .doOnError(e -> log.error("Stream completion error: {}", e.getMessage()));
     }
 
     @Override
     public Mono<ChatResponse> chat(ChatRequest request) {
-        log.debug("Sending chat request for model: {}", request.getModel());
+        log.info("Sending chat request: model={}, messages={}, maxTokens={}, temperature={}",
+                request.getModel(),
+                request.getMessages() != null ? request.getMessages().size() : 0,
+                request.getMaxTokens(), request.getTemperature());
         ChatRequest nonStreaming = Boolean.TRUE.equals(request.getStream())
                 ? copyWithStream(request, false) : request;
         return webClient.post()
@@ -94,14 +108,24 @@ public class OpenAICompatibleAdapter implements LLMPort {
                 .retrieve()
                 .bodyToMono(ChatResponse.class)
                 .retryWhen(Retry.backoff(2, Duration.ofMillis(500))
-                        .filter(e -> !(e instanceof WebClientResponseException.BadRequest)))
+                        .filter(e -> !(e instanceof WebClientResponseException.BadRequest))
+                        .doBeforeRetry(signal -> log.info("Retrying chat request (attempt {}): model={}",
+                                signal.totalRetries() + 1, request.getModel())))
+                .doOnSuccess(resp -> log.info("Chat response received: model={}, finishReason={}, usage={}",
+                        resp.getModel() != null ? resp.getModel() : request.getModel(),
+                        resp.getChoices() != null && !resp.getChoices().isEmpty()
+                                ? resp.getChoices().get(0).getFinishReason() : "n/a",
+                        resp.getUsage()))
                 .doOnError(e -> log.error("Chat error: {}", e.getMessage()))
                 .onErrorMap(WebClientResponseException.class, this::mapError);
     }
 
     @Override
     public Flux<ChatResponse> streamChat(ChatRequest request) {
-        log.debug("Streaming chat for model: {}", request.getModel());
+        log.info("Sending streaming chat request: model={}, messages={}, maxTokens={}",
+                request.getModel(),
+                request.getMessages() != null ? request.getMessages().size() : 0,
+                request.getMaxTokens());
         ChatRequest streaming = copyWithStream(request, true);
         return webClient.post()
                 .uri("/chat/completions")
@@ -109,9 +133,11 @@ public class OpenAICompatibleAdapter implements LLMPort {
                 .bodyValue(streaming)
                 .retrieve()
                 .bodyToFlux(String.class)
+                .doOnSubscribe(s -> log.info("Streaming chat SSE connection established: model={}", request.getModel()))
                 .filter(line -> line.startsWith("data: ") && !line.equals("data: [DONE]"))
                 .map(line -> line.substring(6))
                 .flatMap(this::parseChatChunk)
+                .doOnComplete(() -> log.info("Streaming chat finished: model={}", request.getModel()))
                 .doOnError(e -> log.error("Stream chat error: {}", e.getMessage()));
     }
 

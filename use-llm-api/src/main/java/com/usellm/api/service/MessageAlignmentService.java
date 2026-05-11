@@ -74,6 +74,7 @@ public class MessageAlignmentService {
             log.warn("Unknown alignment strategy '{}', falling back to AUTO_FIX", memoryConfig.getAlignmentStrategy());
             strategy = AlignmentStrategy.AUTO_FIX;
         }
+        log.info("Aligning {} message(s) using strategy={}", messages != null ? messages.size() : 0, strategy);
         return align(messages, strategy);
     }
 
@@ -87,15 +88,19 @@ public class MessageAlignmentService {
      */
     public List<Message> align(List<Message> messages, AlignmentStrategy strategy) {
         if (messages == null || messages.isEmpty()) {
+            log.info("Alignment skipped: empty or null message list");
             return messages;
         }
 
         List<String> violations = validate(messages);
 
         if (violations.isEmpty()) {
-            log.debug("Message alignment OK ({} messages)", messages.size());
+            log.info("Message alignment OK: {} message(s) passed validation (strategy={})", messages.size(), strategy);
             return messages;
         }
+
+        log.info("Alignment violations found: count={}, strategy={}, violations={}",
+                violations.size(), strategy, violations);
 
         switch (strategy) {
             case STRICT:
@@ -104,14 +109,15 @@ public class MessageAlignmentService {
                 throw new LLMException("Message alignment error: " + details, 400, "alignment_error");
 
             case WARN_ONLY:
-                violations.forEach(v -> log.warn("Alignment warning: {}", v));
+                violations.forEach(v -> log.warn("Alignment warning (WARN_ONLY): {}", v));
+                log.info("Returning original {} message(s) unchanged (WARN_ONLY)", messages.size());
                 return messages;
 
             case AUTO_FIX:
             default:
-                violations.forEach(v -> log.info("Auto-fixing alignment: {}", v));
+                violations.forEach(v -> log.info("Auto-fixing alignment violation: {}", v));
                 List<Message> fixed = fix(messages);
-                log.debug("Alignment fixed: {} → {} messages", messages.size(), fixed.size());
+                log.info("Alignment fixed (AUTO_FIX): {} → {} message(s)", messages.size(), fixed.size());
                 return fixed;
         }
     }
@@ -159,6 +165,11 @@ public class MessageAlignmentService {
             }
         }
 
+        if (violations.isEmpty()) {
+            log.info("Validation passed: {} message(s), no violations", messages.size());
+        } else {
+            log.info("Validation found {} violation(s) in {} message(s)", violations.size(), messages.size());
+        }
         return violations;
     }
 

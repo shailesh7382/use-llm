@@ -195,6 +195,308 @@ pre {
   max-height: 360px;
 }
 
+/* ─── Response card ─────────────────────────────────────────────────────── */
+.response-card {
+  background: #0c1828;
+  border: 1px solid #1d3150;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 6px;
+}
+
+.response-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.response-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.response-model {
+  font-size: 12px;
+  color: #7faadc;
+  font-family: monospace;
+}
+
+/* ─── Badges ─────────────────────────────────────────────────────────────── */
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge-ai       { background: #17304d; color: #5bb8ff; border: 1px solid #1b4070; }
+.badge-user     { background: #1e2f1a; color: #7ed880; border: 1px solid #2c4927; }
+.badge-system   { background: #2b2240; color: #b09aff; border: 1px solid #3b2f6e; }
+.badge-release  { background: #2a2010; color: #f5b842; border: 1px solid #4a3714; }
+.badge-finish   { border: 1px solid transparent; }
+.badge-success  { background: #0e2d1a; color: #3ecf7e; border-color: #1a4a2e; }
+.badge-warn     { background: #2e1d0a; color: #f5a642; border-color: #5a3510; }
+
+/* ─── Markdown content area ─────────────────────────────────────────────── */
+.response-content {
+  border-top: 1px solid #1d3150;
+  padding-top: 14px;
+  margin-bottom: 14px;
+}
+
+.md-body {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #d4dfef;
+}
+
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 {
+  color: #e8f0ff;
+  margin: 18px 0 8px;
+}
+
+.md-body h3 { font-size: 15px; }
+.md-body h4 { font-size: 14px; }
+
+.md-body p { margin: 0 0 10px; }
+
+.md-body ul,
+.md-body ol {
+  margin: 0 0 10px 20px;
+  padding: 0;
+}
+
+.md-body li { margin-bottom: 4px; }
+
+.md-body strong { color: #c9daff; }
+
+.md-body code {
+  background: #0a1624;
+  border: 1px solid #1d3050;
+  color: #89d0ff;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12.5px;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+}
+
+.md-body pre {
+  background: #060f1e;
+  border: 1px solid #1a2d48;
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  margin: 10px 0 14px;
+  max-height: 380px;
+}
+
+.md-body pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #b0cef5;
+  font-size: 13px;
+}
+
+.md-body blockquote {
+  border-left: 3px solid #2860d8;
+  margin: 8px 0;
+  padding: 4px 14px;
+  color: #9fb8d8;
+  background: #0e1d33;
+  border-radius: 0 6px 6px 0;
+}
+
+.md-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.md-body th,
+.md-body td {
+  border: 1px solid #1f3050;
+  padding: 7px 10px;
+  text-align: left;
+}
+
+.md-body th {
+  background: #0e1d33;
+  color: #b0cef5;
+}
+
+.md-body hr {
+  border: none;
+  border-top: 1px solid #1f3050;
+  margin: 14px 0;
+}
+
+/* ─── Token / meta strip ─────────────────────────────────────────────────── */
+.response-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid #1d3150;
+  padding-top: 12px;
+  margin-bottom: 12px;
+}
+
+.meta-badge {
+  display: flex;
+  flex-direction: column;
+  background: #0a1624;
+  border: 1px solid #1a2d48;
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 90px;
+}
+
+.meta-label {
+  font-size: 10px;
+  color: #6a85a4;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.meta-value {
+  font-size: 14px;
+  color: #b8d0f0;
+  font-weight: 600;
+}
+
+/* ─── ID chips ───────────────────────────────────────────────────────────── */
+.response-ids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid #1d3150;
+  padding-top: 10px;
+}
+
+.id-chip {
+  font-size: 11px;
+  color: #5d7da0;
+  font-family: monospace;
+  background: #09141f;
+  border: 1px solid #1a2d48;
+  border-radius: 6px;
+  padding: 3px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 340px;
+}
+
+/* ─── Chat history bubbles ───────────────────────────────────────────────── */
+.chat-history {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 6px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.chat-bubble {
+  border-radius: 10px;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+}
+
+.chat-bubble-user      { background: #0e1d2f; border-color: #1e3654; }
+.chat-bubble-assistant { background: #0c1828; border-color: #1a2f4e; }
+.chat-bubble-system    { background: #110e20; border-color: #2b2242; }
+
+.chat-bubble-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chat-bubble-body {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ─── Release notes commits ──────────────────────────────────────────────── */
+.commits-details {
+  margin-top: 16px;
+  border: 1px solid #1a2d48;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.commits-details summary {
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #7faadc;
+  background: #0a1624;
+  user-select: none;
+}
+
+.commits-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.commit-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid #132135;
+  align-items: flex-start;
+}
+
+.commit-sha {
+  font-family: monospace;
+  font-size: 12px;
+  color: #5bb8ff;
+  background: #09141f;
+  border: 1px solid #16304a;
+  border-radius: 5px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.commit-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.commit-msg {
+  color: #cdddf5;
+}
+
+.commit-summary {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #8aaac8;
+}
+
+/* ─── Muted helper ───────────────────────────────────────────────────────── */
+.muted {
+  color: #5b7090;
+  font-size: 13px;
+}
+
 @media (max-width: 1100px) {
   .grid.two {
     grid-template-columns: 1fr;

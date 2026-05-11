@@ -38,19 +38,26 @@ public class ReleaseNotesService {
 
     public Mono<ReleaseNotesResponseDto> generate(ReleaseNotesRequestDto request) {
         String model = resolveModel(request);
+        log.info("Resolved model for release notes: {}", model);
         String effectiveBaseRef = gitCommitReader.resolveEffectiveBaseRef(request);
+        log.info("Effective base ref resolved: {}", effectiveBaseRef != null ? effectiveBaseRef : "(none)");
         List<GitCommitData> commits = gitCommitReader.readCommits(request);
 
-        log.info("Generating release notes for repoPath={}, branch={}, baseRef={}, commits={}",
-                request.getRepoPath(), request.getBranch(), effectiveBaseRef, commits.size());
+        log.info("Generating release notes: repoPath={}, branch={}, baseRef={}, commits={}, model={}",
+                request.getRepoPath(), request.getBranch(), effectiveBaseRef, commits.size(), model);
 
         return Flux.fromIterable(commits)
                 .concatMap(commit -> summarizeCommit(commit, model))
                 .collectList()
-                .flatMap(commitAnalyses -> buildReleaseNotes(request, effectiveBaseRef, model, commits, commitAnalyses));
+                .flatMap(commitAnalyses -> {
+                    log.info("All commits summarized: count={}, proceeding to build release notes", commitAnalyses.size());
+                    return buildReleaseNotes(request, effectiveBaseRef, model, commits, commitAnalyses);
+                });
     }
 
     private Mono<CommitAnalysisDto> summarizeCommit(GitCommitData commit, String model) {
+        log.info("Summarizing commit: sha={}, author='{}', subject='{}'",
+                commit.getShortSha(), commit.getAuthor(), commit.getSubject());
         List<Message> messages = List.of(
                 Message.system("""
                         You analyze one git commit at a time for release notes.
@@ -71,14 +78,19 @@ public class ReleaseNotesService {
                         .stream(false)
                         .build())
                 .map(this::extractContent)
-                .map(summary -> CommitAnalysisDto.builder()
-                        .sha(commit.getSha())
-                        .shortSha(commit.getShortSha())
-                        .author(commit.getAuthor())
-                        .committedAt(commit.getCommittedAt())
-                        .subject(commit.getSubject())
-                        .summary(summary.isBlank() ? commit.getSubject() : summary)
-                        .build());
+                .map(summary -> {
+                    CommitAnalysisDto dto = CommitAnalysisDto.builder()
+                            .sha(commit.getSha())
+                            .shortSha(commit.getShortSha())
+                            .author(commit.getAuthor())
+                            .committedAt(commit.getCommittedAt())
+                            .subject(commit.getSubject())
+                            .summary(summary.isBlank() ? commit.getSubject() : summary)
+                            .build();
+                    log.info("Commit summarized: sha={}, summaryLength={}", commit.getShortSha(), dto.getSummary().length());
+                    return dto;
+                })
+                .doOnError(e -> log.error("Failed to summarize commit sha={}: {}", commit.getSha(), e.getMessage()));
     }
 
     private Mono<ReleaseNotesResponseDto> buildReleaseNotes(ReleaseNotesRequestDto request,
@@ -86,6 +98,8 @@ public class ReleaseNotesService {
                                                             String model,
                                                             List<GitCommitData> commits,
                                                             List<CommitAnalysisDto> analyses) {
+        log.info("Building release notes: repoPath={}, branch={}, model={}, analysisCount={}",
+                request.getRepoPath(), request.getBranch(), model, analyses.size());
         List<Message> messages = List.of(
                 Message.system("""
                         You write polished software release notes for engineering teams and end users.
@@ -108,22 +122,31 @@ public class ReleaseNotesService {
                         .stream(false)
                         .build())
                 .map(this::extractContent)
-                .map(releaseNotes -> ReleaseNotesResponseDto.builder()
-                        .repoPath(request.getRepoPath())
-                        .branch(request.getBranch())
-                        .baseRef(effectiveBaseRef)
-                        .model(model)
-                        .commitCount(commits.size())
-                        .commits(analyses)
-                        .releaseNotes(releaseNotes)
-                        .build());
+                .map(releaseNotes -> {
+                    ReleaseNotesResponseDto dto = ReleaseNotesResponseDto.builder()
+                            .repoPath(request.getRepoPath())
+                            .branch(request.getBranch())
+                            .baseRef(effectiveBaseRef)
+                            .model(model)
+                            .commitCount(commits.size())
+                            .commits(analyses)
+                            .releaseNotes(releaseNotes)
+                            .build();
+                    log.info("Release notes generated: repoPath={}, branch={}, model={}, commitCount={}, notesLength={}",
+                            dto.getRepoPath(), dto.getBranch(), dto.getModel(), dto.getCommitCount(), releaseNotes.length());
+                    return dto;
+                })
+                .doOnError(e -> log.error("Failed to build release notes for branch={}: {}", request.getBranch(), e.getMessage()));
     }
 
     private String resolveModel(ReleaseNotesRequestDto request) {
         if (request.getModel() != null && !request.getModel().isBlank()) {
+            log.info("Using requested model: {}", request.getModel().trim());
             return request.getModel().trim();
         }
-        return llmClientConfig.getDefaultModel();
+        String defaultModel = llmClientConfig.getDefaultModel();
+        log.info("No model in request, using default model: {}", defaultModel);
+        return defaultModel;
     }
 
     private String buildCommitPrompt(GitCommitData commit) {

@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { apiRequest, streamSse } from './api'
+import { ChatHistoryView } from './components/ChatHistoryView'
+import { ChatResponseCard } from './components/ChatResponseCard'
+import { CompletionOutputCard } from './components/CompletionOutputCard'
+import { MarkdownContent } from './components/MarkdownContent'
+import { ReleaseNotesCard } from './components/ReleaseNotesCard'
 import type {
   ChatResponse,
   CompletionResponse,
@@ -525,7 +530,7 @@ function App() {
           </article>
           <article className="card">
             <h2>Completion Output</h2>
-            <pre>{completionOutput || 'Run completion to see output.'}</pre>
+            <CompletionOutputCard output={completionOutput} />
           </article>
         </section>
       )}
@@ -592,9 +597,9 @@ function App() {
               ))}
             </ul>
             <h3>Latest response</h3>
-            <pre>{chatResponse ? pretty(chatResponse) : 'No chat response yet.'}</pre>
+            {chatResponse ? <ChatResponseCard response={chatResponse} /> : <p className="muted">No chat response yet.</p>}
             <h3>History</h3>
-            <pre>{chatHistory.length > 0 ? pretty(chatHistory) : 'No history loaded.'}</pre>
+            <ChatHistoryView messages={chatHistory} />
           </article>
         </section>
       )}
@@ -648,9 +653,38 @@ function App() {
             <h3>Templates</h3>
             <pre>{templates.length > 0 ? pretty(templates) : 'No templates loaded.'}</pre>
             <h3>Render Result</h3>
-            <pre>{promptRenderOutput ? pretty(promptRenderOutput) : 'No render output yet.'}</pre>
+            {promptRenderOutput ? (
+              <div className="response-card">
+                <div className="response-card-header">
+                  <div className="response-card-title">
+                    <span className="badge badge-release">{promptRenderOutput.templateName}</span>
+                  </div>
+                  <span className="badge badge-finish badge-success">~{promptRenderOutput.estimatedTokens} tokens</span>
+                </div>
+                <div className="response-meta" style={{ marginBottom: 8 }}>
+                  {Object.entries(promptRenderOutput.resolvedVariables).map(([k, v]) => (
+                    <div key={k} className="meta-badge">
+                      <span className="meta-label">{k}</span>
+                      <span className="meta-value">{v}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="chat-history">
+                  {promptRenderOutput.messages.map((m, i) => (
+                    <div key={i} className={`chat-bubble chat-bubble-${m.role.toLowerCase()}`}>
+                      <div className="chat-bubble-header">
+                        <span className={`badge ${m.role === 'SYSTEM' ? 'badge-system' : m.role === 'USER' ? 'badge-user' : 'badge-ai'}`}>{m.role}</span>
+                      </div>
+                      <div className="chat-bubble-body">
+                        <MarkdownContent content={m.content} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : <p className="muted">No render output yet.</p>}
             <h3>Prompt Chat Result</h3>
-            <pre>{promptChatOutput ? pretty(promptChatOutput) : 'No prompt chat output yet.'}</pre>
+            {promptChatOutput ? <ChatResponseCard response={promptChatOutput} /> : <p className="muted">No prompt chat output yet.</p>}
           </article>
         </section>
       )}
@@ -702,7 +736,9 @@ function App() {
 
           <article className="card">
             <h2>Generated Release Notes</h2>
-            <pre>{releaseNotesOutput ? pretty(releaseNotesOutput) : 'No release notes generated yet.'}</pre>
+            {releaseNotesOutput
+              ? <ReleaseNotesCard response={releaseNotesOutput} />
+              : <p className="muted">No release notes generated yet.</p>}
           </article>
         </section>
       )}

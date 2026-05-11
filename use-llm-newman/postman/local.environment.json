@@ -43,6 +43,24 @@
 	  "value": "",
 	  "type": "default",
 	  "enabled": true
+	},
+	{
+	  "key": "releaseNotesRepoPath",
+	  "value": "/Users/shailesh/codebase-new/use-llm",
+	  "type": "default",
+	  "enabled": true
+	},
+	{
+	  "key": "releaseNotesBranch",
+	  "value": "origin/copilot/add-release-notes-module",
+	  "type": "default",
+	  "enabled": true
+	},
+	{
+	  "key": "releaseNotesBaseRef",
+	  "value": "origin/copilot/create-java-spring-boot-ai-project",
+	  "type": "default",
+	  "enabled": true
 	}
   ],
   "_postman_variable_scope": "environment",

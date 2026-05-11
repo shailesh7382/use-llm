@@ -62,11 +62,15 @@ public class PromptBuilderService {
 
     @PostConstruct
     public void init() {
-        if (properties.getBuiltInTemplates() == null) return;
+        if (properties.getBuiltInTemplates() == null) {
+            log.info("PromptBuilderService: no built-in templates configured");
+            return;
+        }
         for (PromptProperties.TemplateConfig cfg : properties.getBuiltInTemplates()) {
             PromptTemplate t = fromConfig(cfg);
             t.setBuiltIn(true);
             registry.put(t.getId(), t);
+            log.info("Loaded built-in template: id={}, name={}", t.getId(), t.getName());
         }
         log.info("PromptBuilderService: loaded {} built-in template(s): {}",
                 registry.size(), registry.keySet());
@@ -83,17 +87,24 @@ public class PromptBuilderService {
     public PromptTemplate register(PromptTemplate template) {
         if (template.getId() == null || template.getId().isBlank()) {
             template.setId(UUID.randomUUID().toString());
+            log.info("Generated new template id={}", template.getId());
         }
         PromptTemplate existing = registry.get(template.getId());
         if (existing != null && existing.isBuiltIn()) {
+            log.warn("Attempt to overwrite built-in template id={}", template.getId());
             throw new LLMException(
                     "Cannot overwrite built-in template '" + template.getId() + "'", 409, "conflict");
         }
+        boolean isUpdate = existing != null;
         template.setBuiltIn(false);
         if (template.getCreatedAt() == null) template.setCreatedAt(Instant.now());
         template.setUpdatedAt(Instant.now());
         registry.put(template.getId(), template);
-        log.info("Registered prompt template: id={}", template.getId());
+        log.info("{} prompt template: id={}, name={}, variables={}, examples={}",
+                isUpdate ? "Replaced" : "Registered",
+                template.getId(), template.getName(),
+                template.getVariables() != null ? template.getVariables().size() : 0,
+                template.getExamples() != null ? template.getExamples().size() : 0);
         return template;
     }
 
@@ -103,11 +114,14 @@ public class PromptBuilderService {
      * @throws LLMException 404 if not found, 409 if built-in
      */
     public PromptTemplate update(String id, PromptTemplate updated) {
+        log.info("Updating prompt template: id={}", id);
         PromptTemplate existing = registry.get(id);
         if (existing == null) {
+            log.warn("Prompt template not found for update: id={}", id);
             throw new LLMException("Prompt template not found: " + id, 404, "not_found");
         }
         if (existing.isBuiltIn()) {
+            log.warn("Attempt to modify built-in template id={}", id);
             throw new LLMException("Cannot modify built-in template '" + id + "'", 409, "conflict");
         }
         updated.setId(id);
@@ -115,7 +129,7 @@ public class PromptBuilderService {
         updated.setCreatedAt(existing.getCreatedAt());
         updated.setUpdatedAt(Instant.now());
         registry.put(id, updated);
-        log.info("Updated prompt template: id={}", id);
+        log.info("Updated prompt template: id={}, name={}", id, updated.getName());
         return updated;
     }
 
@@ -126,9 +140,14 @@ public class PromptBuilderService {
      * @throws LLMException 409 if built-in
      */
     public boolean delete(String id) {
+        log.info("Deleting prompt template: id={}", id);
         PromptTemplate existing = registry.get(id);
-        if (existing == null) return false;
+        if (existing == null) {
+            log.info("Prompt template not found for deletion: id={}", id);
+            return false;
+        }
         if (existing.isBuiltIn()) {
+            log.warn("Attempt to delete built-in template id={}", id);
             throw new LLMException("Cannot delete built-in template '" + id + "'", 409, "conflict");
         }
         registry.remove(id);
@@ -138,12 +157,16 @@ public class PromptBuilderService {
 
     /** Returns a template by id, or empty if not found. */
     public Optional<PromptTemplate> findById(String id) {
-        return Optional.ofNullable(registry.get(id));
+        Optional<PromptTemplate> result = Optional.ofNullable(registry.get(id));
+        log.info("Template lookup: id={}, found={}", id, result.isPresent());
+        return result;
     }
 
     /** Returns an unmodifiable snapshot of all registered templates. */
     public List<PromptTemplate> listAll() {
-        return Collections.unmodifiableList(new ArrayList<>(registry.values()));
+        List<PromptTemplate> all = Collections.unmodifiableList(new ArrayList<>(registry.values()));
+        log.info("Listing all templates: count={}", all.size());
+        return all;
     }
 
     // -----------------------------------------------------------------------
@@ -158,10 +181,16 @@ public class PromptBuilderService {
      * @throws LLMException 404 if template not found, 400 if a required variable is missing
      */
     public List<Message> render(String templateId, Map<String, String> variables) {
+        log.info("Rendering template: id={}, suppliedVariables={}", templateId,
+                variables != null ? variables.keySet() : "none");
         PromptTemplate template = findById(templateId)
-                .orElseThrow(() -> new LLMException(
-                        "Prompt template not found: " + templateId, 404, "not_found"));
-        return buildMessages(template, variables);
+                .orElseThrow(() -> {
+                    log.warn("Template not found for render: id={}", templateId);
+                    return new LLMException("Prompt template not found: " + templateId, 404, "not_found");
+                });
+        List<Message> messages = buildMessages(template, variables);
+        log.info("Template '{}' rendered: {} message(s) produced", templateId, messages.size());
+        return messages;
     }
 
     /**
@@ -176,12 +205,17 @@ public class PromptBuilderService {
      */
     public List<Message> buildMessages(PromptTemplate template, Map<String, String> variables) {
         Map<String, String> resolved = resolveVariables(template, variables);
+        log.info("Building messages for template '{}': resolvedVariables={}, examples={}, hasUserPrompt={}",
+                template.getId(), resolved.keySet(),
+                template.getExamples() != null ? template.getExamples().size() : 0,
+                template.getUserPromptTemplate() != null && !template.getUserPromptTemplate().isBlank());
         List<Message> messages = new ArrayList<>();
 
         // 1 – system message
         String systemContent = buildSystemContent(template, resolved);
         if (systemContent != null && !systemContent.isBlank()) {
             messages.add(Message.system(systemContent));
+            log.info("System message built: templateId={}, length={}", template.getId(), systemContent.length());
         }
 
         // 2 – few-shot examples (interleaved USER / ASSISTANT)
@@ -194,15 +228,18 @@ public class PromptBuilderService {
                     messages.add(Message.assistant(substitute(example.getAssistantOutput(), resolved)));
                 }
             }
+            log.info("Few-shot examples appended: templateId={}, exampleCount={}", template.getId(),
+                    template.getExamples().size());
         }
 
         // 3 – user message (rendered user prompt template)
         if (template.getUserPromptTemplate() != null && !template.getUserPromptTemplate().isBlank()) {
             String userContent = substitute(template.getUserPromptTemplate(), resolved);
             messages.add(Message.user(userContent));
+            log.info("User message appended: templateId={}, length={}", template.getId(), userContent.length());
         }
 
-        log.debug("Rendered template '{}' into {} messages with {} variables",
+        log.info("Template '{}' message list complete: {} total message(s), {} resolved variable(s)",
                 template.getId(), messages.size(), resolved.size());
         return messages;
     }
@@ -212,13 +249,17 @@ public class PromptBuilderService {
      */
     public Map<String, String> resolveVariables(PromptTemplate template, Map<String, String> provided) {
         Map<String, String> resolved = new LinkedHashMap<>(provided != null ? provided : Collections.emptyMap());
+        log.info("Resolving variables for template '{}': provided={}", template.getId(),
+                provided != null ? provided.keySet() : "none");
 
         if (template.getVariables() != null) {
             for (PromptVariable varDef : template.getVariables()) {
                 if (!resolved.containsKey(varDef.getName())) {
                     if (varDef.getDefaultValue() != null) {
                         resolved.put(varDef.getName(), varDef.getDefaultValue());
+                        log.info("Variable '{}' defaulted in template '{}'", varDef.getName(), template.getId());
                     } else if (varDef.isRequired()) {
+                        log.warn("Missing required variable '{}' for template '{}'", varDef.getName(), template.getId());
                         throw new LLMException(
                                 "Missing required template variable: '" + varDef.getName() + "'",
                                 400, "template_variable_missing");
@@ -227,7 +268,7 @@ public class PromptBuilderService {
             }
         }
 
-        // Warn about any remaining unresolved placeholders after substitution attempt
+        log.info("Variables resolved for template '{}': finalKeys={}", template.getId(), resolved.keySet());
         return resolved;
     }
 

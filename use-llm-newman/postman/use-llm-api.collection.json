@@ -1069,6 +1069,47 @@
           }
         }
       ]
+    },
+    {
+      "name": "29 - Release Notes - generate from git branch",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"repoPath\": \"{{releaseNotesRepoPath}}\",\n  \"branch\": \"{{releaseNotesBranch}}\",\n  \"baseRef\": \"{{releaseNotesBaseRef}}\",\n  \"model\": \"{{modelId}}\",\n  \"maxCommits\": 20,\n  \"maxDiffCharacters\": 6000\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/release-notes",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "release-notes"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status code is valid', function () { pm.expect(pm.response.code).to.be.a('number').and.be.above(0); });",
+              "const body = pm.response.json();",
+              "if (pm.response.code === 200) {",
+              "  pm.test('repoPath matches', function () { pm.expect(body.repoPath).to.be.a('string'); });",
+              "  pm.test('branch matches', function () { pm.expect(body.branch).to.be.a('string'); });",
+              "  pm.test('commitCount is positive', function () { pm.expect(body.commitCount).to.be.a('number').and.be.greaterThanOrEqualTo(0); });",
+              "  pm.test('releaseNotes exists', function () { pm.expect(body.releaseNotes).to.be.a('string'); });",
+              "} else if (pm.response.code === 400) {",
+              "  pm.test('validation error has expected shape', function () { pm.expect(body.status).to.eql(400); pm.expect(body.type).to.be.a('string'); pm.expect(body.message).to.be.a('string'); });",
+              "}"
+            ]
+          }
+        }
+      ]
     }
   ]
 }

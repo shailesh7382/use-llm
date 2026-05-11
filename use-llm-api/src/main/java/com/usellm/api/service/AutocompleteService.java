@@ -22,7 +22,8 @@ public class AutocompleteService {
     }
 
     public Mono<CompletionResponse> complete(AutocompleteRequestDto request) {
-        log.debug("Autocomplete request for model={}, prompt.length={}", request.getModel(), request.getPrompt().length());
+        log.info("Completion request: model={}, promptLength={}, maxTokens={}, temperature={}",
+                request.getModel(), request.getPrompt().length(), request.getMaxTokens(), request.getTemperature());
         CompletionRequest completionRequest = CompletionRequest.builder()
                 .model(request.getModel())
                 .prompt(request.getPrompt())
@@ -32,11 +33,19 @@ public class AutocompleteService {
                 .suffix(request.getSuffix())
                 .stream(false)
                 .build();
-        return llmPort.complete(completionRequest);
+        return llmPort.complete(completionRequest)
+                .doOnSuccess(resp -> {
+                    String model = resp.getModel() != null ? resp.getModel() : request.getModel();
+                    int choices = resp.getChoices() != null ? resp.getChoices().size() : 0;
+                    log.info("Completion response received: model={}, choices={}, usage={}",
+                            model, choices, resp.getUsage());
+                })
+                .doOnError(e -> log.error("Completion failed for model={}: {}", request.getModel(), e.getMessage()));
     }
 
     public Flux<CompletionResponse> streamComplete(AutocompleteRequestDto request) {
-        log.debug("Streaming autocomplete request for model={}", request.getModel());
+        log.info("Streaming completion request: model={}, promptLength={}, maxTokens={}",
+                request.getModel(), request.getPrompt().length(), request.getMaxTokens());
         CompletionRequest completionRequest = CompletionRequest.builder()
                 .model(request.getModel())
                 .prompt(request.getPrompt())
@@ -46,6 +55,9 @@ public class AutocompleteService {
                 .suffix(request.getSuffix())
                 .stream(true)
                 .build();
-        return llmPort.streamComplete(completionRequest);
+        return llmPort.streamComplete(completionRequest)
+                .doOnSubscribe(s -> log.info("Streaming completion started: model={}", request.getModel()))
+                .doOnComplete(() -> log.info("Streaming completion finished: model={}", request.getModel()))
+                .doOnError(e -> log.error("Streaming completion error for model={}: {}", request.getModel(), e.getMessage()));
     }
 }

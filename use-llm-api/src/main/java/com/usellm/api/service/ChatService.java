@@ -46,12 +46,14 @@ public class ChatService {
     /** Chat completion with memory. */
     public Mono<ChatResponseDto> chat(ChatRequestDto requestDto) {
         String conversationId = resolveConversationId(requestDto.getConversationId());
-        log.info("Chat request: conversationId={}, model={}", conversationId, requestDto.getModel());
+        log.info("Chat request: conversationId={}, model={}, maxTokens={}, temperature={}",
+                conversationId, requestDto.getModel(), requestDto.getMaxTokens(), requestDto.getTemperature());
 
         initializeConversationIfNew(conversationId, requestDto.getSystemPrompt());
         memoryPort.addMessage(conversationId, Message.user(requestDto.getMessage()));
 
         List<Message> contextMessages = alignmentService.align(buildContextMessages(conversationId));
+        log.info("Chat context built: conversationId={}, contextMessages={}", conversationId, contextMessages.size());
 
         ChatRequest chatRequest = ChatRequest.builder()
                 .model(requestDto.getModel())
@@ -66,7 +68,12 @@ public class ChatService {
                 .map(response -> {
                     String assistantContent = extractContent(response);
                     memoryPort.addMessage(conversationId, Message.assistant(assistantContent));
-                    return buildResponseDto(conversationId, response, assistantContent);
+                    ChatResponseDto dto = buildResponseDto(conversationId, response, assistantContent);
+                    log.info("Chat response received: conversationId={}, model={}, finishReason={}, " +
+                                    "promptTokens={}, completionTokens={}, totalTokens={}, memorySize={}",
+                            conversationId, dto.getModel(), dto.getFinishReason(),
+                            dto.getPromptTokens(), dto.getCompletionTokens(), dto.getTotalTokens(), dto.getMemorySize());
+                    return dto;
                 })
                 .doOnError(e -> log.error("Chat error for conversation {}: {}", conversationId, e.getMessage()));
     }
@@ -74,12 +81,14 @@ public class ChatService {
     /** Streaming chat with memory (SSE). */
     public Flux<ChatResponseDto> streamChat(ChatRequestDto requestDto) {
         String conversationId = resolveConversationId(requestDto.getConversationId());
-        log.info("Streaming chat: conversationId={}, model={}", conversationId, requestDto.getModel());
+        log.info("Streaming chat request: conversationId={}, model={}, maxTokens={}, temperature={}",
+                conversationId, requestDto.getModel(), requestDto.getMaxTokens(), requestDto.getTemperature());
 
         initializeConversationIfNew(conversationId, requestDto.getSystemPrompt());
         memoryPort.addMessage(conversationId, Message.user(requestDto.getMessage()));
 
         List<Message> contextMessages = alignmentService.align(buildContextMessages(conversationId));
+        log.info("Streaming chat context built: conversationId={}, contextMessages={}", conversationId, contextMessages.size());
 
         ChatRequest chatRequest = ChatRequest.builder()
                 .model(requestDto.getModel())
@@ -93,6 +102,7 @@ public class ChatService {
         StringBuilder fullResponse = new StringBuilder();
 
         return llmPort.streamChat(chatRequest)
+                .doOnSubscribe(s -> log.info("SSE stream opened: conversationId={}", conversationId))
                 .map(chunk -> {
                     String delta = extractDelta(chunk);
                     if (delta != null) fullResponse.append(delta);
@@ -106,6 +116,9 @@ public class ChatService {
                     if (fullResponse.length() > 0) {
                         memoryPort.addMessage(conversationId, Message.assistant(fullResponse.toString()));
                     }
+                    log.info("SSE stream completed: conversationId={}, totalResponseLength={}, memorySize={}",
+                            conversationId, fullResponse.length(),
+                            memoryPort.getMessageCount(conversationId));
                 })
                 .doOnError(e -> log.error("Stream chat error for {}: {}", conversationId, e.getMessage()));
     }
@@ -126,12 +139,14 @@ public class ChatService {
                 ? requestDto.getModel()
                 : llmClientConfig.getDefaultModel();
 
-        log.info("PromptChat request: templateId={}, conversationId={}, model={}",
-                requestDto.getTemplateId(), conversationId, model);
+        log.info("PromptChat request: templateId={}, conversationId={}, model={}, maxTokens={}, temperature={}",
+                requestDto.getTemplateId(), conversationId, model,
+                requestDto.getMaxTokens(), requestDto.getTemperature());
 
         // Render template → ordered messages
         List<Message> rendered = promptBuilderService.render(
                 requestDto.getTemplateId(), requestDto.getVariables());
+        log.info("Template '{}' rendered into {} message(s)", requestDto.getTemplateId(), rendered.size());
 
         // The last message must be the USER message (the actual query).
         // Everything before it is seeded into memory as conversation context.
@@ -147,14 +162,16 @@ public class ChatService {
 
         // Only initialise the conversation if it does not already exist
         if (!memoryPort.conversationExists(conversationId)) {
+            log.info("Seeding new conversation '{}' with {} context message(s) from template", conversationId, seedEndIdx);
             for (int i = 0; i < seedEndIdx; i++) {
                 memoryPort.addMessage(conversationId, rendered.get(i));
             }
+        } else {
+            log.info("Conversation '{}' already exists — skipping template seed", conversationId);
         }
 
         if (userMessage == null) {
-            // No user message in template → treat all rendered messages as context seed,
-            // no LLM call possible. Return an explanatory error.
+            log.warn("Template '{}' produced no USER message — cannot invoke LLM", requestDto.getTemplateId());
             throw new com.usellm.core.exception.LLMException(
                     "Template '" + requestDto.getTemplateId() +
                     "' did not produce a USER message. Set userPromptTemplate.", 400, "template_error");
@@ -163,6 +180,7 @@ public class ChatService {
         memoryPort.addMessage(conversationId, userMessage);
 
         List<Message> contextMessages = alignmentService.align(buildContextMessages(conversationId));
+        log.info("PromptChat context built: conversationId={}, contextMessages={}", conversationId, contextMessages.size());
 
         ChatRequest chatRequest = ChatRequest.builder()
                 .model(model)
@@ -177,31 +195,43 @@ public class ChatService {
                 .map(response -> {
                     String assistantContent = extractContent(response);
                     memoryPort.addMessage(finalConvId, Message.assistant(assistantContent));
-                    return buildResponseDto(finalConvId, response, assistantContent);
+                    ChatResponseDto dto = buildResponseDto(finalConvId, response, assistantContent);
+                    log.info("PromptChat response: conversationId={}, model={}, finishReason={}, totalTokens={}, memorySize={}",
+                            finalConvId, dto.getModel(), dto.getFinishReason(),
+                            dto.getTotalTokens(), dto.getMemorySize());
+                    return dto;
                 })
                 .doOnError(e -> log.error("PromptChat error for conversation {}: {}", finalConvId, e.getMessage()));
     }
 
     /** Get conversation history. */
     public List<Message> getHistory(String conversationId) {
-        return memoryPort.getMessages(conversationId);
+        log.info("Fetching history: conversationId={}", conversationId);
+        List<Message> messages = memoryPort.getMessages(conversationId);
+        log.info("History fetched: conversationId={}, messageCount={}", conversationId, messages.size());
+        return messages;
     }
 
     /** Clear conversation memory (messages only). */
     public void clearConversation(String conversationId) {
-        log.info("Clearing conversation {}", conversationId);
+        log.info("Clearing conversation messages: conversationId={}", conversationId);
         memoryPort.clearConversation(conversationId);
+        log.info("Conversation messages cleared: conversationId={}", conversationId);
     }
 
     /** Delete a conversation entirely. */
     public void deleteConversation(String conversationId) {
-        log.info("Deleting conversation {}", conversationId);
+        log.info("Deleting conversation: conversationId={}", conversationId);
         memoryPort.deleteConversation(conversationId);
+        log.info("Conversation deleted: conversationId={}", conversationId);
     }
 
     /** List conversations ordered by recent activity. */
     public List<ConversationSummary> listConversations(int limit) {
-        return memoryPort.listConversations(limit);
+        log.info("Listing conversations: limit={}", limit);
+        List<ConversationSummary> result = memoryPort.listConversations(limit);
+        log.info("Conversations listed: found={}", result.size());
+        return result;
     }
 
     // -----------------------------------------------------------------------
@@ -209,7 +239,13 @@ public class ChatService {
     // -----------------------------------------------------------------------
 
     private String resolveConversationId(String provided) {
-        return (provided != null && !provided.isBlank()) ? provided : UUID.randomUUID().toString();
+        if (provided != null && !provided.isBlank()) {
+            log.info("Using existing conversationId={}", provided);
+            return provided;
+        }
+        String newId = UUID.randomUUID().toString();
+        log.info("New conversationId generated: {}", newId);
+        return newId;
     }
 
     private void initializeConversationIfNew(String conversationId, String customSystemPrompt) {
@@ -217,16 +253,23 @@ public class ChatService {
             String systemPrompt = (customSystemPrompt != null && !customSystemPrompt.isBlank())
                     ? customSystemPrompt
                     : memoryConfig.getSystemPrompt();
+            log.info("Initializing new conversation: conversationId={}, systemPromptSource={}",
+                    conversationId, (customSystemPrompt != null && !customSystemPrompt.isBlank()) ? "custom" : "default");
             memoryPort.addMessage(conversationId, Message.system(systemPrompt));
+        } else {
+            log.info("Conversation already exists — no init needed: conversationId={}", conversationId);
         }
     }
 
     private List<Message> buildContextMessages(String conversationId) {
-        return switch (memoryConfig.getStrategy().toUpperCase()) {
+        String strategy = memoryConfig.getStrategy().toUpperCase();
+        List<Message> messages = switch (strategy) {
             case "SLIDING_WINDOW" -> memoryPort.getRecentMessages(conversationId, memoryConfig.getMaxMessages());
             case "TOKEN_AWARE"    -> memoryPort.getMessagesWithinTokenBudget(conversationId, memoryConfig.getMaxTokens());
             default               -> memoryPort.getMessages(conversationId);
         };
+        log.info("Context messages built: conversationId={}, strategy={}, count={}", conversationId, strategy, messages.size());
+        return messages;
     }
 
     private String extractContent(ChatResponse response) {
