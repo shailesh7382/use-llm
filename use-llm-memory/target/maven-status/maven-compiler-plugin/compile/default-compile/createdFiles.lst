@@ -1,8 +1,0 @@
-com/usellm/memory/config/MemoryConfig.class
-com/usellm/memory/repository/MessageRepository.class
-com/usellm/memory/entity/ConversationEntity.class
-com/usellm/memory/service/ConversationMemoryService.class
-com/usellm/memory/entity/MessageEntity.class
-com/usellm/memory/entity/MessageEntity$MessageEntityBuilder.class
-com/usellm/memory/entity/ConversationEntity$ConversationEntityBuilder.class
-com/usellm/memory/repository/ConversationRepository.class
